@@ -140,8 +140,6 @@ func CheckSQLValue(val string) string {
 		`"`, `\"`,
 		`&`, "&amp;",
 	).Replace(val)
-
-	return val
 }
 
 // import YesNo
