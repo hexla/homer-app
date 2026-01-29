@@ -393,7 +393,7 @@ func (sc *SearchController) GetMessagesAsPCap(c echo.Context) error {
 		searchObject.Param.Location.Node, sc.SettingService, userGroup, searchObject.Param.WhiteList)
 
 	c.Response().Header().Set(echo.HeaderContentDisposition, fmt.Sprintf("attachment; filename=export-%s.pcap", time.Now().Format(time.RFC3339)))
-	if err := c.Blob(http.StatusOK, "application/octet-stream", []byte(reply)); err != nil {
+	if err := c.Blob(http.StatusOK, "application/vnd.tcpdump.pcap", []byte(reply)); err != nil {
 		logger.Error(err.Error())
 	}
 
