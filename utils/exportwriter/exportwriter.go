@@ -187,6 +187,31 @@ func (w *Writer) WriteDataPcapBuffer(h *gabs.Container) error {
 		ComputeChecksums: true,
 	}
 
+	buildPayloadLayer := func(packet *ExportElement, ipLayer gopacket.NetworkLayer) (gopacket.SerializableLayer, error) {
+		switch(layers.IPProtocol(packet.ProtocolType)) {
+			case layers.IPProtocolTCP, 22, layers.IPProtocolESP:
+				// 22 = IDP, fake protocol for TLS (OpenSIPS, Kamailio) and WS/WSS (Kamailio)
+				// ESP, fake protocol for WS/WSS (OpenSIPS)
+				tcpLayer := &layers.TCP{
+					SrcPort: layers.TCPPort(packet.SrcPort),
+					DstPort: layers.TCPPort(packet.DstPort),
+				}
+				return tcpLayer, tcpLayer.SetNetworkLayerForChecksum(ipLayer)
+			case layers.IPProtocolSCTP:
+				sctpLayer := &layers.SCTP{
+					SrcPort: layers.SCTPPort(packet.SrcPort),
+					DstPort: layers.SCTPPort(packet.DstPort),
+				}
+				return sctpLayer, nil
+			default:
+				udpLayer := &layers.UDP{
+					SrcPort: layers.UDPPort(packet.SrcPort),
+					DstPort: layers.UDPPort(packet.DstPort),
+				}
+				return udpLayer, udpLayer.SetNetworkLayerForChecksum(ipLayer)
+		}
+	}
+
 	if ethTypeFinal == layers.EthernetTypeIPv4 {
 
 		var ipLayer *layers.IPv4
@@ -237,24 +262,19 @@ func (w *Writer) WriteDataPcapBuffer(h *gabs.Container) error {
 			}
 		}
 
-		udpLayer := &layers.UDP{
-			SrcPort: layers.UDPPort(packet.SrcPort),
-			DstPort: layers.UDPPort(packet.DstPort),
-		}
-
-		err := udpLayer.SetNetworkLayerForChecksum(ipLayer)
+		payloadLayer, err := buildPayloadLayer(packet, ipLayer)
 		if err != nil {
 			return nil
 		}
 
 		if ipLayerv6 != nil {
 			err = gopacket.SerializeLayers(buffer, opts,
-				ethernetLayer, ipLayer, ipLayerv6, udpLayer,
+				ethernetLayer, ipLayer, ipLayerv6, payloadLayer,
 				gopacket.Payload(packet.Message),
 			)
 		} else {
 			err = gopacket.SerializeLayers(buffer, opts,
-				ethernetLayer, ipLayer, udpLayer,
+				ethernetLayer, ipLayer, payloadLayer,
 				gopacket.Payload(packet.Message),
 			)
 		}
@@ -274,18 +294,13 @@ func (w *Writer) WriteDataPcapBuffer(h *gabs.Container) error {
 			NextHeader: layers.IPProtocolUDP,
 		}
 
-		udpLayer := &layers.UDP{
-			SrcPort: layers.UDPPort(packet.SrcPort),
-			DstPort: layers.UDPPort(packet.DstPort),
-		}
-
-		err := udpLayer.SetNetworkLayerForChecksum(ipLayer)
+		payloadLayer, err := buildPayloadLayer(packet, ipLayer)
 		if err != nil {
 			return nil
 		}
 
 		err = gopacket.SerializeLayers(buffer, opts,
-			ethernetLayer, ipLayer, udpLayer,
+			ethernetLayer, ipLayer, payloadLayer,
 			gopacket.Payload(packet.Message),
 		)
 
